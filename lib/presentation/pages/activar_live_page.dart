@@ -5,6 +5,44 @@ import 'package:battle_live/services/tiktok_service.dart';
 import 'package:battle_live/config/app_config.dart';
 import 'dart:async';
 
+// Modelo para donador
+class Donador {
+  final String uniqueId;
+  final String nickname;
+  final String? profilePictureUrl;
+  int diamantesTotales;
+  DateTime ultimaDonacion;
+
+  Donador({
+    required this.uniqueId,
+    required this.nickname,
+    this.profilePictureUrl,
+    this.diamantesTotales = 0,
+    DateTime? ultimaDonacion,
+  }) : ultimaDonacion = ultimaDonacion ?? DateTime.now();
+
+  void agregarDonacion(int diamantes) {
+    diamantesTotales += diamantes;
+    ultimaDonacion = DateTime.now();
+  }
+  
+  // Obtener el tiempo transcurrido desde la última donación
+  String get tiempoTranscurrido {
+    final now = DateTime.now();
+    final difference = now.difference(ultimaDonacion);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays} ${difference.inDays == 1 ? 'día' : 'días'}';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} ${difference.inHours == 1 ? 'hora' : 'horas'}';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes} ${difference.inMinutes == 1 ? 'minuto' : 'minutos'}';
+    } else {
+      return 'Ahora';
+    }
+  }
+}
+
 class ActivarLivePage extends StatefulWidget {
   const ActivarLivePage({super.key});
 
@@ -45,12 +83,14 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
   bool _cargando = true;
   String? _error;
 
+  // Historial de donadores
+  final Map<String, Donador> _donadores = {};
+  Donador? _mayorDonador;
+
   @override
   void initState() {
     super.initState();
     _cargarEsqueletos();
-    
-    // Ya no es necesario inicializar el servicio TikTok aquí
     
     // Configurar listeners para TikTok
     _configurarTikTokListeners();
@@ -72,6 +112,108 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
         _detenerActualizadorPuntos();
       }
     });
+
+    // Escuchar eventos de regalos para actualizar donadores
+    _tikTokService.client.giftStream.listen((giftEvent) {
+      // Crear un mapa con la información necesaria
+      Map<String, dynamic> data = {
+        'eventName': 'gift',
+        'user': {
+          'uniqueId': giftEvent.userId,
+          'nickname': giftEvent.username,
+          'profilePictureUrl': giftEvent.avatarUrl,
+        },
+        'gift': {
+          'diamondCount': giftEvent.diamondCount,
+          'repeatCount': giftEvent.repeatCount,
+        }
+      };
+      
+      _actualizarDonadores(data);
+    });
+  }
+
+  // Actualizar la lista de donadores cuando se recibe un regalo
+  void _actualizarDonadores(Map<String, dynamic> data) {
+    try {
+      final userData = data['user'] as Map<String, dynamic>?;
+      final giftData = data['gift'] as Map<String, dynamic>?;
+      
+      if (userData == null || giftData == null) return;
+      
+      final uniqueId = userData['uniqueId'] as String;
+      final nickname = userData['nickname'] as String;
+      final profilePictureUrl = userData['profilePictureUrl'] as String?;
+      final diamondCount = giftData['diamondCount'] as int;
+      final repeatCount = giftData['repeatCount'] as int? ?? 1;
+      
+      // Calcular valor total de la donación
+      final valorTotal = diamondCount * repeatCount;
+      
+      // Actualizar o crear registro del donador
+      if (_donadores.containsKey(uniqueId)) {
+        _donadores[uniqueId]!.agregarDonacion(valorTotal);
+      } else {
+        _donadores[uniqueId] = Donador(
+          uniqueId: uniqueId,
+          nickname: nickname,
+          profilePictureUrl: profilePictureUrl,
+          diamantesTotales: valorTotal,
+        );
+      }
+      
+      // Actualizar mayor donador
+      _actualizarMayorDonador();
+      
+      // Actualizar UI
+      if (mounted) {
+        setState(() {});
+      }
+      
+      AppLogger.info(
+        'Donación registrada: $nickname donó $valorTotal diamantes (Total: ${_donadores[uniqueId]!.diamantesTotales})',
+        name: 'ActivarLivePage'
+      );
+    } catch (e, s) {
+      AppLogger.error(
+        'Error al procesar donación', 
+        name: 'ActivarLivePage',
+        error: e,
+        stackTrace: s
+      );
+    }
+  }
+  
+  // Determinar quién es el mayor donador
+  void _actualizarMayorDonador() {
+    if (_donadores.isEmpty) {
+      _mayorDonador = null;
+      return;
+    }
+    
+    Donador? topDonador;
+    int maxDiamantes = 0;
+    
+    for (final donador in _donadores.values) {
+      if (donador.diamantesTotales > maxDiamantes) {
+        maxDiamantes = donador.diamantesTotales;
+        topDonador = donador;
+      }
+    }
+    
+    setState(() {
+      _mayorDonador = topDonador;
+    });
+  }
+  
+  // Reiniciar historial de donadores
+  void _reiniciarDonadores() {
+    setState(() {
+      _donadores.clear();
+      _mayorDonador = null;
+    });
+    
+    AppLogger.info('Historial de donadores reiniciado', name: 'ActivarLivePage');
   }
   
   // Iniciar timer para actualizar puntos periódicamente
@@ -218,6 +360,168 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
     // TODO: Implementar la lógica real de activación
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Activando "${esqueleto['titulo']}" en sección $seccion...')),
+    );
+  }
+
+  // Widget que muestra al mayor donador
+  Widget _buildMayorDonadorCard() {
+    return Card(
+      margin: const EdgeInsets.all(16),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.amber.shade50, Colors.amber.shade100],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Encabezado
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.emoji_events, color: Colors.amber.shade700),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Mayor Donador',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const Divider(height: 24),
+              
+              if (_mayorDonador == null)
+                const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Center(
+                    child: Text(
+                      'Esperando donaciones...',
+                      style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                    ),
+                  ),
+                )
+              else
+                Column(
+                  children: [
+                    // Avatar con imagen de perfil
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Fondo brillante
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: [Colors.amber.shade300, Colors.amber.shade100.withOpacity(0.1)],
+                              stops: const [0.5, 1.0],
+                            ),
+                          ),
+                        ),
+                        // Avatar
+                        CircleAvatar(
+                          radius: 40,
+                          backgroundColor: Colors.amber.shade200,
+                          backgroundImage: _mayorDonador!.profilePictureUrl != null
+                              ? NetworkImage(_mayorDonador!.profilePictureUrl!)
+                              : null,
+                          child: _mayorDonador!.profilePictureUrl == null
+                              ? Icon(Icons.person, size: 40, color: Colors.amber.shade800)
+                              : null,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // Nombre del donador
+                    Text(
+                      _mayorDonador!.nickname,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    Text(
+                      '@${_mayorDonador!.uniqueId}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    
+                    // Última donación
+                    Text(
+                      'Última donación: ${_mayorDonador!.tiempoTranscurrido}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // Total de diamantes
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade200,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.amber.shade200.withOpacity(0.5),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.diamond, color: Colors.amber.shade800, size: 24),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${_mayorDonador!.diamantesTotales}',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.amber.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                
+              const SizedBox(height: 16),
+              
+              // Botón para reiniciar
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reiniciar donadores'),
+                  onPressed: _reiniciarDonadores,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.amber.shade800,
+                    side: BorderSide(color: Colors.amber.shade300),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -631,11 +935,16 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Panel de TikTok en la izquierda
+                  // Panel izquierdo: TikTok + Mayor Donador
                   Expanded(
                     flex: 1,
                     child: SingleChildScrollView(
-                      child: _buildTikTokControlPanel(),
+                      child: Column(
+                        children: [
+                          _buildTikTokControlPanel(),
+                          _buildMayorDonadorCard(), // Añadimos el widget de mayor donador
+                        ],
+                      ),
                     ),
                   ),
                   
@@ -653,11 +962,17 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                 ],
               );
             } else if (constraints.maxWidth > 700) {
-              // En pantallas intermedias, mostrar secciones en fila abajo del panel
+              // En pantallas intermedias, mostrar secciones en fila abajo de los paneles
               return Column(
                 children: [
-                  // Panel de TikTok arriba
-                  _buildTikTokControlPanel(),
+                  // Paneles de control
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _buildTikTokControlPanel()),
+                      Expanded(child: _buildMayorDonadorCard()),
+                    ],
+                  ),
                   
                   // Secciones abajo
                   Expanded(
@@ -677,6 +992,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                 child: Column(
                   children: [
                     _buildTikTokControlPanel(),
+                    _buildMayorDonadorCard(), // Añadimos el widget de mayor donador
                     _buildSeccion(1),
                     _buildSeccion(2),
                   ],
