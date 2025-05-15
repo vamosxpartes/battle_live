@@ -193,16 +193,46 @@ class TikTokLiveClient {
     
     _socket?.on('gift', (data) {
       try {
+        // Imprimir datos completos para debugging
+        AppLogger.info(
+          'Datos completos del regalo recibido: ${data.toString()}',
+          name: 'TikTokGiftDebug'
+        );
+        
+        // Verificar la estructura del objeto gift
+        final giftData = data['gift'] as Map<String, dynamic>?;
+        
+        if (giftData == null) {
+          AppLogger.warning('Evento gift recibido sin objeto gift: $data', name: 'TikTokGiftDebug');
+        }
+        
+        // Extraer nombre y valor del regalo de la estructura correcta
+        final giftName = giftData?['name'] ?? data['giftName'] ?? 'Regalo';
+        final diamondCount = giftData?['diamondCount'] ?? data['diamondCount'] ?? 0;
+        final repeatCount = giftData?['repeatCount'] ?? data['repeatCount'] ?? 1;
+        
+        // Extraer información del usuario
+        final user = data['user'] as Map<String, dynamic>?;
+        final username = user?['nickname'] ?? data['username'] ?? 'Usuario';
+        final userId = user?['userId'] ?? data['userId'] ?? '';
+        final avatarUrl = user?['profilePictureUrl'] ?? data['avatarUrl'] ?? '';
+        
+        AppLogger.info(
+          'Regalo procesado: Usuario=$username, Regalo=$giftName, Diamantes=$diamondCount, Repeticiones=$repeatCount',
+          name: 'TikTokGiftDebug'
+        );
+        
         _giftController.add(GiftEvent(
-          username: data['username'] ?? 'Usuario',
-          giftName: data['giftName'] ?? 'Regalo',
-          diamondCount: data['diamondCount'] ?? 0,
-          repeatCount: data['repeatCount'] ?? 1,
-          userId: data['userId'] ?? '',
-          avatarUrl: data['avatarUrl'] ?? '',
+          username: username,
+          giftName: giftName,
+          diamondCount: diamondCount,
+          repeatCount: repeatCount,
+          userId: userId,
+          avatarUrl: avatarUrl,
           rawData: data,
         ));
       } catch (e) {
+        AppLogger.error('Error al procesar regalo', name: 'TikTokGiftDebug', error: e);
         _errorController.add(ErrorEvent(
           message: 'Error al procesar regalo: $e',
           originalError: e,

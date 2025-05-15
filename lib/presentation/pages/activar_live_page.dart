@@ -1,7 +1,9 @@
-
 import 'package:flutter/material.dart';
 import 'package:battle_live/data/datasources/esqueleto_service.dart';
 import 'package:battle_live/core/logging/app_logger.dart';
+import 'package:battle_live/services/tiktok_service.dart';
+import 'package:battle_live/config/app_config.dart';
+import 'dart:async';
 
 class ActivarLivePage extends StatefulWidget {
   const ActivarLivePage({super.key});
@@ -13,12 +15,31 @@ class ActivarLivePage extends StatefulWidget {
 class _ActivarLivePageState extends State<ActivarLivePage> {
   final EsqueletoService _esqueletoService = EsqueletoService();
   
+  // TikTok service - inicializado directamente
+  final TikTokService _tikTokService = TikTokService(
+    serverUrl: AppConfig().socketServerUrl
+  );
+  
+  // Controlador para el usuario de TikTok
+  final TextEditingController _usuarioTikTokController = TextEditingController();
+  
+  // Estado de conexión TikTok
+  bool _tiktokConectado = false;
+  String _tiktokUsuario = '';
+  
+  // Timer para actualizar puntos automáticamente
+  Timer? _actualizadorPuntos;
+  
   // Lista de esqueletos cargados desde Firebase
   List<Map<String, dynamic>> _esqueletos = [];
   
   // Esqueletos seleccionados para cada sección
   Map<String, dynamic>? _esqueleto1Seleccionado;
   Map<String, dynamic>? _esqueleto2Seleccionado;
+  
+  // Contadores de puntos por sección
+  int _puntosSeccion1 = 0;
+  int _puntosSeccion2 = 0;
   
   // Estado de carga
   bool _cargando = true;
@@ -28,6 +49,118 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
   void initState() {
     super.initState();
     _cargarEsqueletos();
+    
+    // Ya no es necesario inicializar el servicio TikTok aquí
+    
+    // Configurar listeners para TikTok
+    _configurarTikTokListeners();
+  }
+  
+  // Configurar listeners para el servicio TikTok
+  void _configurarTikTokListeners() {
+    // Escuchar cambios en el estado de conexión
+    _tikTokService.client.connectionStateStream.listen((event) {
+      setState(() {
+        _tiktokConectado = event.isConnected;
+        _tiktokUsuario = event.username;
+      });
+      
+      // Iniciar o detener el timer de actualización según el estado de conexión
+      if (_tiktokConectado) {
+        _iniciarActualizadorPuntos();
+      } else {
+        _detenerActualizadorPuntos();
+      }
+    });
+  }
+  
+  // Iniciar timer para actualizar puntos periódicamente
+  void _iniciarActualizadorPuntos() {
+    AppLogger.info('Iniciando actualizador de puntos automático', name: 'ActivarLivePage');
+    _actualizadorPuntos?.cancel();
+    
+    // Actualizar inmediatamente
+    _actualizarContadores();
+    
+    // Configurar el timer para actualizaciones periódicas
+    _actualizadorPuntos = Timer.periodic(const Duration(seconds: 1), (_) {
+      _actualizarContadores();
+    });
+  }
+  
+  // Actualizar los contadores manualmente
+  void _actualizarContadores() {
+    if (mounted) {
+      final puntos1 = _tikTokService.puntosContendiente1;
+      final puntos2 = _tikTokService.puntosContendiente2;
+      
+      AppLogger.info(
+        'Actualizando contadores UI - Contendiente 1: $puntos1, Contendiente 2: $puntos2', 
+        name: 'ActivarLivePage'
+      );
+      
+      setState(() {
+        _puntosSeccion1 = puntos1;
+        _puntosSeccion2 = puntos2;
+      });
+    }
+  }
+  
+  // Detener timer de actualización
+  void _detenerActualizadorPuntos() {
+    AppLogger.info('Deteniendo actualizador de puntos', name: 'ActivarLivePage');
+    _actualizadorPuntos?.cancel();
+    _actualizadorPuntos = null;
+  }
+  
+  // Conectar a usuario TikTok
+  Future<void> _conectarUsuarioTikTok() async {
+    final username = _usuarioTikTokController.text.trim();
+    if (username.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor ingresa un nombre de usuario')),
+      );
+      return;
+    }
+    
+    setState(() {
+      _cargando = true;
+    });
+    
+    try {
+      final conectado = await _tikTokService.conectarUsuario(username);
+      
+      if (!mounted) return;
+      
+      if (conectado) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Conectado a @$username')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo conectar a @$username')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cargando = false;
+        });
+      }
+    }
+  }
+  
+  // Desconectar de TikTok
+  void _desconectarTikTok() {
+    _tikTokService.desconectar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Desconectado de TikTok')),
+    );
   }
 
   // Cargar esqueletos desde Firebase
@@ -89,7 +222,10 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
   }
 
   // Construir el widget de pantalla de teléfono con previsualización
-  Widget _buildPhonePreview(Map<String, dynamic>? esqueleto) {
+  Widget _buildPhonePreview(Map<String, dynamic>? esqueleto, int seccion) {
+    // Determinar los puntos según la sección
+    final puntos = seccion == 1 ? _puntosSeccion1 : _puntosSeccion2;
+    
     // Dimensiones para simular una pantalla de teléfono (aspecto 9:16)
     const double phoneWidth = 180;
     const double phoneHeight = phoneWidth * (16 / 9);
@@ -175,8 +311,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
-                                _buildContadorPreview(esqueleto['contendiente1'] ?? 'Contendiente 1', '00'),
-                                _buildContadorPreview(esqueleto['contendiente2'] ?? 'Contendiente 2', '00'),
+                                _buildContadorPreview(esqueleto['contendiente1'] ?? 'Contendiente 1', '$puntos'),
                               ],
                             ),
                           ],
@@ -251,7 +386,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
             const SizedBox(height: 24),
             
             // Previsualización del esqueleto seleccionado
-            _buildPhonePreview(esqueletoSeleccionado),
+            _buildPhonePreview(esqueletoSeleccionado, numeroSeccion),
             const SizedBox(height: 24),
             
             // Dropdown para seleccionar esqueleto
@@ -309,6 +444,171 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
       ),
     );
   }
+  
+  // Panel de control de TikTok
+  Widget _buildTikTokControlPanel() {
+    return Card(
+      margin: const EdgeInsets.all(16),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Control de TikTok Live',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // Estado de conexión
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _tiktokConectado ? Colors.green.shade100 : Colors.red.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _tiktokConectado ? Icons.check_circle : Icons.error, 
+                    color: _tiktokConectado ? Colors.green : Colors.red,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _tiktokConectado 
+                          ? 'Conectado a @$_tiktokUsuario' 
+                          : 'Desconectado',
+                      style: TextStyle(
+                        color: _tiktokConectado ? Colors.green.shade800 : Colors.red.shade800,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Campo de usuario y botones
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _usuarioTikTokController,
+                    decoration: const InputDecoration(
+                      labelText: 'Usuario TikTok',
+                      prefixText: '@',
+                      border: OutlineInputBorder(),
+                    ),
+                    enabled: !_tiktokConectado,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _tiktokConectado
+                    ? ElevatedButton(
+                        onPressed: _desconectarTikTok,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Desconectar'),
+                      )
+                    : ElevatedButton(
+                        onPressed: _conectarUsuarioTikTok,
+                        child: const Text('Conectar'),
+                      ),
+              ],
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Contadores actuales
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Puntos acumulados:', style: Theme.of(context).textTheme.titleMedium),
+                
+                // Botón para actualizar contadores manualmente
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _tiktokConectado ? _actualizarContadores : null,
+                  tooltip: 'Actualizar contadores manualmente',
+                  color: Colors.blue,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildContadorTikTok('Contendiente 1', _puntosSeccion1, Colors.blue),
+                _buildContadorTikTok('Contendiente 2', _puntosSeccion2, Colors.red),
+              ],
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Botón para reiniciar contadores
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reiniciar contadores'),
+                onPressed: _tiktokConectado ? () {
+                  _tikTokService.reiniciarPuntos();
+                  _actualizarContadores();
+                } : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black87,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Widget para mostrar contadores de TikTok
+  Widget _buildContadorTikTok(String nombre, int puntos, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color, width: 2),
+      ),
+      child: Column(
+        children: [
+          Text(
+            nombre,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$puntos',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _usuarioTikTokController.dispose();
+    _tikTokService.dispose();
+    _detenerActualizadorPuntos();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -326,20 +626,57 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Si el ancho es suficiente, mostrar las secciones en fila
-            if (constraints.maxWidth > 700) {
+            // Si el ancho es suficiente, mostrar secciones en filas y columnas
+            if (constraints.maxWidth > 900) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _buildSeccion(1)),
-                  Expanded(child: _buildSeccion(2)),
+                  // Panel de TikTok en la izquierda
+                  Expanded(
+                    flex: 1,
+                    child: SingleChildScrollView(
+                      child: _buildTikTokControlPanel(),
+                    ),
+                  ),
+                  
+                  // Secciones a la derecha
+                  Expanded(
+                    flex: 2,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _buildSeccion(1)),
+                        Expanded(child: _buildSeccion(2)),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            } else if (constraints.maxWidth > 700) {
+              // En pantallas intermedias, mostrar secciones en fila abajo del panel
+              return Column(
+                children: [
+                  // Panel de TikTok arriba
+                  _buildTikTokControlPanel(),
+                  
+                  // Secciones abajo
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _buildSeccion(1)),
+                        Expanded(child: _buildSeccion(2)),
+                      ],
+                    ),
+                  ),
                 ],
               );
             } else {
-              // En pantallas más estrechas, mostrar las secciones en columna
+              // En pantallas más estrechas, mostrar todo en columna
               return SingleChildScrollView(
                 child: Column(
                   children: [
+                    _buildTikTokControlPanel(),
                     _buildSeccion(1),
                     _buildSeccion(2),
                   ],

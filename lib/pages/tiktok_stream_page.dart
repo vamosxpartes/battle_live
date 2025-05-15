@@ -13,8 +13,10 @@ class TikTokStreamPage extends StatefulWidget {
 }
 
 class _TikTokStreamPageState extends State<TikTokStreamPage> {
-  // Cliente TikTok Live
-  late TikTokService _tikTokService;
+  // Cliente TikTok Live - inicializado con valor por defecto
+  final TikTokService _tikTokService = TikTokService(
+    serverUrl: AppConfig().socketServerUrl
+  );
   
   // Lista de mensajes
   final List<ChatEvent> _messages = [];
@@ -40,9 +42,8 @@ class _TikTokStreamPageState extends State<TikTokStreamPage> {
   void initState() {
     super.initState();
     
-    // Inicializar servicio
-    AppLogger.info('Inicializando TikTokService en TikTokStreamPage con URL: ${AppConfig().socketServerUrl}', name: 'TikTokStreamPage');
-    _tikTokService = TikTokService(serverUrl: AppConfig().socketServerUrl);
+    // Inicializar servicio - ya no es necesario, se inicializa en la declaración
+    AppLogger.info('TikTokService ya inicializado en TikTokStreamPage con URL: ${AppConfig().socketServerUrl}', name: 'TikTokStreamPage');
     
     // Configurar listener para donaciones
     _tikTokService.addDonacionListener(_procesarDonacion);
