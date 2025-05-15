@@ -1,0 +1,17 @@
+[
+  {
+    "origin": ["http://localhost", "http://localhost:*", "http://localhost:59123", "http://localhost:60263", "https://localhost", "https://localhost:*"],
+    "method": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "responseHeader": [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "X-Goog-Upload-Protocol",
+      "X-Goog-Upload-Command",
+      "X-Goog-Upload-Header-Content-Length",
+      "X-Goog-Upload-Header-Content-Type",
+      "X-Goog-Upload-Offset"
+    ],
+    "maxAgeSeconds": 3600
+  }
+] 

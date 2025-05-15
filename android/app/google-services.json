@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "88233283465",
+    "project_id": "battlelive-d2631",
+    "storage_bucket": "battlelive-d2631.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:88233283465:android:64bbf45daf8805bc125b58",
+        "android_client_info": {
+          "package_name": "com.example.battle_live"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXaBw66P58op88rU8-n_JxznlbBKiUFDI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

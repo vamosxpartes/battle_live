@@ -26,6 +26,8 @@ class _CrearEsqueletoPageState extends State<CrearEsqueletoPage> {
   
   XFile? _imagenSeleccionada;
   bool _guardando = false;
+  double _progresoSubida = 0.0; // Progreso de subida de imagen (0.0 a 1.0)
+  bool _subiendoImagen = false; // Flag específico para la subida de imagen
 
   @override
   void initState() {
@@ -77,27 +79,67 @@ class _CrearEsqueletoPageState extends State<CrearEsqueletoPage> {
       
       setState(() {
         _guardando = true;
+        _progresoSubida = 0.0;
+        _subiendoImagen = false;
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Subiendo imagen y guardando esqueleto...')),
+        const SnackBar(content: Text('Preparando subida de imagen y esqueleto...')),
       );
       
       try {
         AppLogger.info('Iniciando proceso de guardado de esqueleto', name: 'CrearEsqueletoPage');
         
         // 1. Subir imagen a Firebase Storage
-        final String fileName = 'esqueleto_live_background_${DateTime.now().millisecondsSinceEpoch}.${_imagenSeleccionada!.path.split('.').last}';
+        // Determinar extensión del archivo de manera segura
+        String extension = 'jpg'; // Extensión por defecto
+        if (_imagenSeleccionada!.name.contains('.')) {
+          extension = _imagenSeleccionada!.name.split('.').last.toLowerCase();
+          // Si la extensión contiene caracteres no válidos, usar jpg
+          if (extension.contains(':') || extension.contains('/')) {
+            extension = 'jpg';
+          }
+        }
+        
+        final String fileName = 'esqueleto_live_background_${DateTime.now().millisecondsSinceEpoch}.$extension';
         final String storagePath = 'esqueletos_live/imagenes_fondo/$fileName';
         
         AppLogger.info('Subiendo imagen a Storage: $storagePath', name: 'CrearEsqueletoPage');
+        
+        // Actualizar estado para mostrar que estamos subiendo la imagen
+        setState(() {
+          _subiendoImagen = true;
+        });
+        
+        // Llamar a showSnackBar para indicar que estamos subiendo la imagen
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Subiendo imagen... Esto puede tomar un momento'),
+            duration: Duration(seconds: 15),
+          ),
+        );
+        
         final String? imageUrl = await _storageService.uploadImage(
           _imagenSeleccionada!,
           storagePath,
+          comprimir: true,
+          calidadCompresion: 85, // Calidad ligeramente más alta para mantener buena apariencia visual
+          onProgress: (progress) {
+            setState(() {
+              _progresoSubida = progress;
+            });
+          },
         );
+        
+        // Restablecer bandera de subida de imagen
+        setState(() {
+          _subiendoImagen = false;
+        });
         
         if (imageUrl == null) {
           AppLogger.error('Error al subir imagen a Firebase Storage', name: 'CrearEsqueletoPage');
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Error al subir la imagen. Inténtalo de nuevo.')),
           );
@@ -141,6 +183,9 @@ class _CrearEsqueletoPageState extends State<CrearEsqueletoPage> {
         
         // 3. Mostrar mensaje de éxito y volver a la pantalla anterior
         if (mounted) {
+          setState(() {
+            _guardando = false;
+          });
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Esqueleto de Live guardado con éxito')),
@@ -266,6 +311,25 @@ class _CrearEsqueletoPageState extends State<CrearEsqueletoPage> {
               ),
             ),
             const SizedBox(height: 24),
+            
+            // Barra de progreso de subida de imagen (solo visible durante la subida)
+            if (_subiendoImagen) ...[
+              const Text('Subiendo imagen...', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: _progresoSubida,
+                backgroundColor: Colors.grey[300],
+                semanticsLabel: 'Progreso de subida de imagen',
+                semanticsValue: '${(_progresoSubida * 100).toInt()}%',
+              ),
+              Text(
+                '${(_progresoSubida * 100).toInt()}%',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+            ],
+            
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),

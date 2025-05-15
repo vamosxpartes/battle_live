@@ -1,9 +1,1 @@
-{
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  }
-}
+{"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"},"storage":{"rules":"storage.rules"},"flutter":{"platforms":{"android":{"default":{"projectId":"battlelive-d2631","appId":"1:88233283465:android:64bbf45daf8805bc125b58","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"battlelive-d2631","configurations":{"android":"1:88233283465:android:64bbf45daf8805bc125b58","web":"1:88233283465:web:bf68a05a0fa29f30125b58"}}}}}}

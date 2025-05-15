@@ -19,6 +19,12 @@ class EsqueletoService {
     AppLogger.info('Intentando guardar nuevo esqueleto: "$titulo"', name: 'EsqueletoService');
     
     try {
+      AppLogger.info('Validando parámetros de entrada...', name: 'EsqueletoService');
+      if (titulo.isEmpty || contendiente1.isEmpty || contendiente2.isEmpty || imagenUrl.isEmpty) {
+        AppLogger.warning('Datos inválidos para guardar esqueleto: algún campo está vacío', name: 'EsqueletoService');
+        return null;
+      }
+      
       final Map<String, dynamic> esqueletoData = {
         'titulo': titulo,
         'contendiente1': contendiente1,
@@ -31,14 +37,50 @@ class EsqueletoService {
       AppLogger.info('Datos del esqueleto a guardar: $esqueletoData', name: 'EsqueletoService');
       
       // Guardar documento en Firestore
-      final DocumentReference docRef = await _esqueletosCollection.add(esqueletoData);
+      AppLogger.info('Iniciando operación add() en Firestore...', name: 'EsqueletoService');
+      AppLogger.info('Colección objetivo: ${_esqueletosCollection.path}', name: 'EsqueletoService');
+      
+      DocumentReference? docRef;
+      try {
+        AppLogger.info('Ejecutando add() en Firestore...', name: 'EsqueletoService');
+        docRef = await _esqueletosCollection.add(esqueletoData);
+        AppLogger.info('Operación add() completada, obteniendo ID...', name: 'EsqueletoService');
+      } catch (e, s) {
+        AppLogger.error('Error específico durante la operación add() en Firestore', 
+          name: 'EsqueletoService', 
+          error: e,
+          stackTrace: s
+        );
+        return null;
+      }
+      
+      if (docRef == null) {
+        AppLogger.error('Error: La referencia del documento es nula después de add()', name: 'EsqueletoService');
+        return null;
+      }
+      
       final String esqueletoId = docRef.id;
+      AppLogger.info('ID del documento obtenido: $esqueletoId', name: 'EsqueletoService');
+      
+      // Verificar que el documento fue creado correctamente
+      try {
+        AppLogger.info('Verificando que el documento existe en Firestore...', name: 'EsqueletoService');
+        final docSnapshot = await docRef.get();
+        if (!docSnapshot.exists) {
+          AppLogger.warning('El documento no existe después de crearlo', name: 'EsqueletoService');
+        } else {
+          AppLogger.info('Documento verificado y existe en Firestore', name: 'EsqueletoService');
+        }
+      } catch (e, s) {
+        AppLogger.warning('Error al verificar documento: ${e.toString()}', name: 'EsqueletoService');
+        // No retornamos aquí porque ya tenemos el ID y la operación principal ya se completó
+      }
       
       AppLogger.info('Esqueleto guardado exitosamente con ID: $esqueletoId', name: 'EsqueletoService');
       return esqueletoId;
     } catch (e, s) {
       AppLogger.error(
-        'Error al guardar esqueleto en Firestore', 
+        'Error al guardar esqueleto en Firestore: ${e.toString()}', 
         name: 'EsqueletoService',
         error: e,
         stackTrace: s
@@ -67,7 +109,7 @@ class EsqueletoService {
       }
     } catch (e, s) {
       AppLogger.error(
-        'Error al obtener esqueleto $esqueletoId', 
+        'Error al obtener esqueleto $esqueletoId: ${e.toString()}', 
         name: 'EsqueletoService',
         error: e,
         stackTrace: s
@@ -81,10 +123,12 @@ class EsqueletoService {
     AppLogger.info('Obteniendo lista de esqueletos', name: 'EsqueletoService');
     
     try {
+      AppLogger.info('Ejecutando query para obtener esqueletos...', name: 'EsqueletoService');
       final QuerySnapshot querySnapshot = await _esqueletosCollection
           .orderBy('fechaCreacion', descending: true)
           .get();
       
+      AppLogger.info('Query completada, procesando resultados...', name: 'EsqueletoService');
       final List<Map<String, dynamic>> esqueletos = querySnapshot.docs
           .map((doc) => {
             'id': doc.id,
@@ -96,7 +140,7 @@ class EsqueletoService {
       return esqueletos;
     } catch (e, s) {
       AppLogger.error(
-        'Error al obtener lista de esqueletos', 
+        'Error al obtener lista de esqueletos: ${e.toString()}', 
         name: 'EsqueletoService',
         error: e,
         stackTrace: s
@@ -129,13 +173,14 @@ class EsqueletoService {
       
       AppLogger.info('Datos a actualizar: $updateData', name: 'EsqueletoService');
       
+      AppLogger.info('Ejecutando operación update() en Firestore...', name: 'EsqueletoService');
       await _esqueletosCollection.doc(esqueletoId).update(updateData);
       
       AppLogger.info('Esqueleto actualizado exitosamente', name: 'EsqueletoService');
       return true;
     } catch (e, s) {
       AppLogger.error(
-        'Error al actualizar esqueleto $esqueletoId', 
+        'Error al actualizar esqueleto $esqueletoId: ${e.toString()}', 
         name: 'EsqueletoService',
         error: e,
         stackTrace: s
@@ -149,13 +194,14 @@ class EsqueletoService {
     AppLogger.info('Eliminando esqueleto: $esqueletoId', name: 'EsqueletoService');
     
     try {
+      AppLogger.info('Ejecutando operación delete() en Firestore...', name: 'EsqueletoService');
       await _esqueletosCollection.doc(esqueletoId).delete();
       
       AppLogger.info('Esqueleto eliminado exitosamente', name: 'EsqueletoService');
       return true;
     } catch (e, s) {
       AppLogger.error(
-        'Error al eliminar esqueleto $esqueletoId', 
+        'Error al eliminar esqueleto $esqueletoId: ${e.toString()}', 
         name: 'EsqueletoService',
         error: e,
         stackTrace: s

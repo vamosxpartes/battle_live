@@ -31,13 +31,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBattleLiveAppKey',
-    appId: '1:123456789012:web:abcdef1234567890',
-    messagingSenderId: '123456789012',
-    projectId: 'battle-live',
-    authDomain: 'battle-live.firebaseapp.com',
-    storageBucket: 'battle-live.appspot.com',
-    measurementId: 'G-ABCDEFGHIJ',
+    apiKey: 'AIzaSyAhHYGgGVkS0UeGPaORaTTiDtAnexeaaNA',
+    appId: '1:88233283465:web:bf68a05a0fa29f30125b58',
+    messagingSenderId: '88233283465',
+    projectId: 'battlelive-d2631',
+    authDomain: 'battlelive-d2631.firebaseapp.com',
+    storageBucket: 'battlelive-d2631.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -45,7 +44,7 @@ class DefaultFirebaseOptions {
     appId: '1:123456789012:android:abcdef1234567890',
     messagingSenderId: '123456789012',
     projectId: 'battle-live',
-    storageBucket: 'battle-live.appspot.com',
+    storageBucket: 'battlelive-d2631.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -53,7 +52,7 @@ class DefaultFirebaseOptions {
     appId: '1:123456789012:ios:abcdef1234567890',
     messagingSenderId: '123456789012',
     projectId: 'battle-live',
-    storageBucket: 'battle-live.appspot.com',
+    storageBucket: 'battlelive-d2631.firebasestorage.app',
     iosBundleId: 'com.example.battleLive',
   );
 
@@ -62,7 +61,7 @@ class DefaultFirebaseOptions {
     appId: '1:123456789012:macos:abcdef1234567890',
     messagingSenderId: '123456789012',
     projectId: 'battle-live',
-    storageBucket: 'battle-live.appspot.com',
+    storageBucket: 'battlelive-d2631.firebasestorage.app',
     iosBundleId: 'com.example.battleLive',
   );
 } 
