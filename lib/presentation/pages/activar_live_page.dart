@@ -4,6 +4,7 @@ import 'package:battle_live/core/logging/app_logger.dart';
 import 'package:battle_live/services/tiktok_service.dart';
 import 'package:battle_live/config/app_config.dart';
 import 'dart:async';
+import 'package:battle_live/presentation/widgets/device_stream_screen.dart';
 
 // Modelo para donador
 class Donador {
@@ -71,13 +72,12 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
   // Lista de esqueletos cargados desde Firebase
   List<Map<String, dynamic>> _esqueletos = [];
   
-  // Esqueletos seleccionados para cada sección
-  Map<String, dynamic>? _esqueleto1Seleccionado;
-  Map<String, dynamic>? _esqueleto2Seleccionado;
+  // Esqueleto seleccionado para el DeviceStream
+  Map<String, dynamic>? _esqueletoSeleccionadoParaStream;
   
-  // Contadores de puntos por sección
-  int _puntosSeccion1 = 0;
-  int _puntosSeccion2 = 0;
+  // Contadores de puntos (ahora para DeviceStream)
+  int _puntosSeccion1 = 0; // Representará puntosIzquierda para DeviceStream
+  int _puntosSeccion2 = 0; // Representará puntosDerecha para DeviceStream
   
   // Estado de carga
   bool _cargando = true;
@@ -348,21 +348,6 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
     }
   }
 
-  // Activar el esqueleto seleccionado (implementación pendiente)
-  Future<void> _activarEsqueleto(Map<String, dynamic>? esqueleto, int seccion) async {
-    if (esqueleto == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Por favor, selecciona un esqueleto para la sección $seccion')),
-      );
-      return;
-    }
-
-    // TODO: Implementar la lógica real de activación
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Activando "${esqueleto['titulo']}" en sección $seccion...')),
-    );
-  }
-
   // Widget que muestra al mayor donador
   Widget _buildMayorDonadorCard() {
     return Card(
@@ -525,230 +510,6 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
     );
   }
 
-  // Construir el widget de pantalla de teléfono con previsualización
-  Widget _buildPhonePreview(Map<String, dynamic>? esqueleto, int seccion) {
-    // Determinar los puntos según la sección
-    final puntos = seccion == 1 ? _puntosSeccion1 : _puntosSeccion2;
-    
-    // Dimensiones para simular una pantalla de teléfono (aspecto 9:16)
-    const double phoneWidth = 180;
-    const double phoneHeight = phoneWidth * (16 / 9);
-
-    return Center(
-      child: Container(
-        width: phoneWidth + 20, // Ancho extra para el borde del "teléfono"
-        height: phoneHeight + 40, // Altura extra para el borde
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 20),
-        decoration: BoxDecoration(
-          color: Colors.black87,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade700, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(30),
-              spreadRadius: 2,
-              blurRadius: 5,
-              offset: const Offset(0, 3),
-            )
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            width: phoneWidth,
-            height: phoneHeight,
-            color: Colors.grey[300], // Color de fondo si no hay imagen
-            child: esqueleto == null
-                ? const Center(child: Text('Selecciona un esqueleto', style: TextStyle(color: Colors.black54)))
-                : Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Imagen de fondo
-                      esqueleto['imagenUrl'] != null
-                          ? Image.network(
-                              esqueleto['imagenUrl'],
-                              fit: BoxFit.cover,
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Center(
-                                  child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes != null
-                                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                        : null,
-                                  ),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                return const Center(child: Icon(Icons.broken_image, size: 50));
-                              },
-                            )
-                          : Container(color: Colors.grey),
-                      
-                      // Overlay con título y contadores
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.black.withOpacity(0.5), Colors.transparent, Colors.black.withOpacity(0.5)],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            stops: const [0.0, 0.5, 1.0]
-                          )
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // Título del Live
-                            Text(
-                              esqueleto['titulo'] ?? 'Título del Live',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white, 
-                                fontSize: 14, 
-                                fontWeight: FontWeight.bold, 
-                                shadows: [Shadow(blurRadius: 2, color: Colors.black54)]
-                              ),
-                            ),
-                            // Contadores
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _buildContadorPreview(esqueleto['contendiente1'] ?? 'Contendiente 1', '$puntos'),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Construir los widgets de contador para la previsualización
-  Widget _buildContadorPreview(String nombre, String puntaje) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          nombre, 
-          style: const TextStyle(
-            color: Colors.white, 
-            fontSize: 10, 
-            shadows: [Shadow(blurRadius: 1, color: Colors.black54)]
-          )
-        ),
-        const SizedBox(height: 4),
-        Text(
-          puntaje, 
-          style: const TextStyle(
-            color: Colors.white, 
-            fontSize: 16, 
-            fontWeight: FontWeight.bold, 
-            shadows: [Shadow(blurRadius: 2, color: Colors.black54)]
-          )
-        ),
-      ],
-    );
-  }
-
-  // Construir una sección completa (pantalla, dropdown, botón)
-  Widget _buildSeccion(int numeroSeccion) {
-    // Determinar qué esqueleto está seleccionado para esta sección
-    Map<String, dynamic>? esqueletoSeleccionado = 
-        numeroSeccion == 1 ? _esqueleto1Seleccionado : _esqueleto2Seleccionado;
-    
-    // Función para actualizar el esqueleto seleccionado
-    void onEsqueletoSeleccionado(Map<String, dynamic>? nuevoEsqueleto) {
-      setState(() {
-        if (numeroSeccion == 1) {
-          _esqueleto1Seleccionado = nuevoEsqueleto;
-        } else {
-          _esqueleto2Seleccionado = nuevoEsqueleto;
-        }
-      });
-    }
-    
-    return Card(
-      margin: const EdgeInsets.all(16),
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Título de la sección
-            Text(
-              'Sección $numeroSeccion',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 24),
-            
-            // Previsualización del esqueleto seleccionado
-            _buildPhonePreview(esqueletoSeleccionado, numeroSeccion),
-            const SizedBox(height: 24),
-            
-            // Dropdown para seleccionar esqueleto
-            _cargando
-            ? const CircularProgressIndicator()
-            : _error != null
-                ? Text(_error!, style: const TextStyle(color: Colors.red))
-                : DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(
-                      labelText: 'Seleccionar esqueleto',
-                      border: OutlineInputBorder(),
-                    ),
-                    value: esqueletoSeleccionado?['id'],
-                    hint: const Text('Selecciona un esqueleto'),
-                    items: _esqueletos.map((esqueleto) {
-                      return DropdownMenuItem<String>(
-                        value: esqueleto['id'],
-                        child: Text('${esqueleto['titulo']} (${esqueleto['contendiente1']} vs ${esqueleto['contendiente2']})'),
-                      );
-                    }).toList(),
-                    onChanged: (String? esqueletoId) {
-                      if (esqueletoId != null) {
-                        final esqueletoSeleccionado = _esqueletos.firstWhere(
-                          (esqueleto) => esqueleto['id'] == esqueletoId,
-                          orElse: () => {},
-                        );
-                        onEsqueletoSeleccionado(esqueletoSeleccionado);
-                      } else {
-                        onEsqueletoSeleccionado(null);
-                      }
-                    },
-                  ),
-            const SizedBox(height: 24),
-            
-            // Botón para activar
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                onPressed: _cargando || _error != null
-                    ? null
-                    : () => _activarEsqueleto(
-                          numeroSeccion == 1
-                              ? _esqueleto1Seleccionado
-                              : _esqueleto2Seleccionado,
-                          numeroSeccion,
-                        ),
-                child: const Text('Activar'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
   // Panel de control de TikTok
   Widget _buildTikTokControlPanel() {
     return Card(
@@ -906,6 +667,83 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
     );
   }
 
+  // Widget para el panel de control lateral
+  Widget _buildPanelDeControl() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTikTokControlPanel(),
+          const SizedBox(height: 24),
+          _buildSelectorEsqueleto(),
+          const SizedBox(height: 24),
+          _buildMayorDonadorCard(),
+        ],
+      ),
+    );
+  }
+
+  // Widget para seleccionar el esqueleto para el DeviceStream
+  Widget _buildSelectorEsqueleto() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Configuración del Live',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            _cargando
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+                  ? Text(_error!, style: const TextStyle(color: Colors.red, fontStyle: FontStyle.italic))
+                  : DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Seleccionar fondo y contendientes',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                      ),
+                      value: _esqueletoSeleccionadoParaStream?['id'],
+                      hint: const Text('Elige un esqueleto'),
+                      isExpanded: true,
+                      items: _esqueletos.map((esqueleto) {
+                        return DropdownMenuItem<String>(
+                          value: esqueleto['id'],
+                          child: Text(
+                            '${esqueleto['titulo'] ?? 'Esqueleto sin título'} (${esqueleto['contendiente1'] ?? 'N/A'} vs ${esqueleto['contendiente2'] ?? 'N/A'})',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (String? esqueletoId) {
+                        if (esqueletoId != null) {
+                          final seleccionado = _esqueletos.firstWhere(
+                            (e) => e['id'] == esqueletoId,
+                            orElse: () => {},
+                          );
+                          setState(() {
+                            _esqueletoSeleccionadoParaStream = seleccionado.isNotEmpty ? seleccionado : null;
+                          });
+                        } else {
+                          setState(() {
+                            _esqueletoSeleccionadoParaStream = null;
+                          });
+                        }
+                      },
+                      validator: (value) => value == null ? 'Por favor selecciona un esqueleto' : null,
+                    ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _usuarioTikTokController.dispose();
@@ -930,71 +768,48 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Si el ancho es suficiente, mostrar secciones en filas y columnas
-            if (constraints.maxWidth > 900) {
+            // Si el ancho es suficiente, mostrar DeviceStream a la izquierda y panel de control a la derecha
+            if (constraints.maxWidth > 800) { // Ajusta este breakpoint según sea necesario
               return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Panel izquierdo: TikTok + Mayor Donador
                   Expanded(
-                    flex: 1,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          _buildTikTokControlPanel(),
-                          _buildMayorDonadorCard(), // Añadimos el widget de mayor donador
-                        ],
+                    flex: 3, // Ajusta flex para dar más espacio a DeviceStream
+                    child: Center(
+                      child: DeviceStream(
+                        esqueleto: _esqueletoSeleccionadoParaStream,
+                        puntosIzquierda: _puntosSeccion1,
+                        puntosDerecha: _puntosSeccion2,
+                        mayorDonador: _mayorDonador,
                       ),
                     ),
                   ),
-                  
-                  // Secciones a la derecha
-                  Expanded(
-                    flex: 2,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: _buildSeccion(1)),
-                        Expanded(child: _buildSeccion(2)),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            } else if (constraints.maxWidth > 700) {
-              // En pantallas intermedias, mostrar secciones en fila abajo de los paneles
-              return Column(
-                children: [
-                  // Paneles de control
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _buildTikTokControlPanel()),
-                      Expanded(child: _buildMayorDonadorCard()),
-                    ],
-                  ),
-                  
-                  // Secciones abajo
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: _buildSeccion(1)),
-                        Expanded(child: _buildSeccion(2)),
-                      ],
-                    ),
+                  SizedBox(
+                    width: 350, // Ancho fijo para el panel de control
+                    child: _buildPanelDeControl(),
                   ),
                 ],
               );
             } else {
-              // En pantallas más estrechas, mostrar todo en columna
+              // En pantallas más estrechas, mostrar DeviceStream arriba y panel de control abajo (o en un Drawer)
+              // Por ahora, una columna simple con scroll
               return SingleChildScrollView(
                 child: Column(
                   children: [
-                    _buildTikTokControlPanel(),
-                    _buildMayorDonadorCard(), // Añadimos el widget de mayor donador
-                    _buildSeccion(1),
-                    _buildSeccion(2),
+                    SizedBox(
+                      // Altura deseada para el DeviceStream en modo columna
+                      // Podría ser una fracción de la altura de la pantalla
+                      height: constraints.maxHeight * 0.65, // Ejemplo: 65% de la altura disponible
+                      child: Center(
+                        child: DeviceStream(
+                          esqueleto: _esqueletoSeleccionadoParaStream,
+                          puntosIzquierda: _puntosSeccion1,
+                          puntosDerecha: _puntosSeccion2,
+                          mayorDonador: _mayorDonador,
+                        ),
+                      ),
+                    ),
+                    const Divider(),
+                    _buildPanelDeControl(),
                   ],
                 ),
               );

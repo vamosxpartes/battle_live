@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data'; // Necesario para Uint8List
 import 'package:battle_live/core/logging/app_logger.dart'; // Importar AppLogger
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb; // Necesario para kIsWeb
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
@@ -87,7 +86,7 @@ class StorageService {
               // Reducir resolución para imágenes muy grandes
               minHeight: 1920, // Limitar altura máxima
               minWidth: 1080,  // Limitar ancho máximo
-            ) as XFile?;
+            );
             
             if (archivoComprimido == null) {
               throw Exception('Error al comprimir la imagen');
@@ -182,7 +181,7 @@ class StorageService {
           }
           
           AppLogger.info(
-            'Progreso de subida: ${progressPercentage}% - Estado: ${snapshot.state.name}$timeInfo',
+            'Progreso de subida: $progressPercentage% - Estado: ${snapshot.state.name}$timeInfo',
             name: 'StorageService'
           );
         }
@@ -275,7 +274,7 @@ class StorageService {
       }
     } catch (e, s) {
       AppLogger.error(
-        'Error al subir la imagen a ${path}', 
+        'Error al subir la imagen a $path', 
         name: 'StorageService', 
         error: e, 
         stackTrace: s
