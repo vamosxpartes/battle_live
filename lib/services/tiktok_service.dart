@@ -201,6 +201,16 @@ class TikTokService {
     );
   }
   
+  // Añadir puntos manualmente
+  void anadirPuntos(int contendienteId, int cantidad) {
+    AppLogger.info(
+      'Añadiendo puntos manualmente - Contendiente: $contendienteId, Cantidad: $cantidad',
+      name: 'TikTokGiftDebug'
+    );
+    
+    _actualizarPuntos(contendienteId, cantidad);
+  }
+  
   // Conectar a un usuario de TikTok
   Future<bool> conectarUsuario(String username) async {
     AppLogger.info('Solicitando conexión a usuario TikTok: @$username', name: 'TikTokService');

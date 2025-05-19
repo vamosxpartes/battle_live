@@ -5,6 +5,7 @@ import 'package:battle_live/services/tiktok_service.dart';
 import 'package:battle_live/config/app_config.dart';
 import 'dart:async';
 import 'package:battle_live/presentation/widgets/device_stream_screen.dart';
+import 'package:battle_live/presentation/widgets/video_player_widget.dart';
 
 // Modelo para donador
 class Donador {
@@ -89,7 +90,8 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
 
   // Propiedades para el temporizador
   int _tiempoSeleccionado = 3600; // 1 hora por defecto
-  bool _temporizadorPausado = false;
+  bool _temporizadorPausado = true; // Ahora inicia pausado
+  final TextEditingController _tiempoController = TextEditingController(text: "01:00:00");
 
   @override
   void initState() {
@@ -659,29 +661,108 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
   
   // Widget para mostrar contadores de TikTok
   Widget _buildContadorTikTok(String nombre, int puntos, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color, width: 2),
-      ),
-      child: Column(
-        children: [
-          Text(
-            nombre,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color, width: 2),
           ),
-          const SizedBox(height: 8),
-          Text(
-            '$puntos',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
+          child: Column(
+            children: [
+              Text(
+                nombre,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$puntos',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Botones para añadir puntos manualmente
+        const SizedBox(height: 8),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Botón para añadir 1 punto
+            ElevatedButton(
+              onPressed: _tiktokConectado ? () {
+                int contendienteId = nombre.contains('1') ? 1 : 2;
+                _anadirPuntosManualmente(contendienteId, 1);
+              } : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color.withOpacity(0.7),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(40, 36),
+              ),
+              child: const Text('+1'),
             ),
-          ),
-        ],
+            const SizedBox(width: 4),
+            
+            // Botón para añadir 10 puntos
+            ElevatedButton(
+              onPressed: _tiktokConectado ? () {
+                int contendienteId = nombre.contains('1') ? 1 : 2;
+                _anadirPuntosManualmente(contendienteId, 10);
+              } : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color.withOpacity(0.7),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(40, 36),
+              ),
+              child: const Text('+10'),
+            ),
+            const SizedBox(width: 4),
+            
+            // Botón para añadir 100 puntos
+            ElevatedButton(
+              onPressed: _tiktokConectado ? () {
+                int contendienteId = nombre.contains('1') ? 1 : 2;
+                _anadirPuntosManualmente(contendienteId, 100);
+              } : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color.withOpacity(0.7),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(40, 36),
+              ),
+              child: const Text('+100'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // Método para añadir puntos manualmente a un contendiente
+  void _anadirPuntosManualmente(int contendienteId, int cantidad) {
+    if (!_tiktokConectado) return;
+    
+    AppLogger.info(
+      'Añadiendo $cantidad puntos manualmente al contendiente $contendienteId',
+      name: 'ActivarLivePage'
+    );
+    
+    // Usar el servicio TikTok para añadir puntos
+    _tikTokService.anadirPuntos(contendienteId, cantidad);
+    
+    // Actualizar contadores UI
+    _actualizarContadores();
+    
+    // Mostrar notificación
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$cantidad punto${cantidad > 1 ? 's' : ''} añadido${cantidad > 1 ? 's' : ''} al contendiente $contendienteId'),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -700,6 +781,29 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
             Text(
               'Control de Temporizador',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // Campo para ingresar tiempo personalizado
+            TextField(
+              controller: _tiempoController,
+              decoration: const InputDecoration(
+                labelText: 'Tiempo inicial (HH:MM:SS)',
+                helperText: 'Ejemplo: 00:30:00 para 30 minutos',
+                border: OutlineInputBorder(),
+                suffixIcon: Icon(Icons.timer),
+              ),
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (value) => _convertirTiempoDesdeTexto(value),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => _convertirTiempoDesdeTexto(_tiempoController.text),
+                child: const Text('Establecer tiempo'),
+              ),
             ),
             const SizedBox(height: 16),
             
@@ -750,7 +854,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                 // Botón para pausar/reanudar
                 ElevatedButton.icon(
                   icon: Icon(_temporizadorPausado ? Icons.play_arrow : Icons.pause),
-                  label: Text(_temporizadorPausado ? 'Reanudar' : 'Pausar'),
+                  label: Text(_temporizadorPausado ? 'Iniciar' : 'Pausar'),
                   onPressed: _togglePausa,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _temporizadorPausado ? Colors.green : Colors.amber,
@@ -833,7 +937,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
   void _reiniciarTemporizador() {
     setState(() {
       _tiempoSeleccionado = 3600; // Volver a 1 hora
-      _temporizadorPausado = false;
+      _temporizadorPausado = true;
     });
   }
   
@@ -843,6 +947,45 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
       setState(() {
         _tiempoSeleccionado = nuevoTiempo;
       });
+    }
+  }
+
+  // Widget para convertir texto a segundos
+  void _convertirTiempoDesdeTexto(String texto) {
+    try {
+      // Verificar si es formato HH:MM:SS
+      if (texto.contains(':')) {
+        final partes = texto.split(':');
+        if (partes.length == 3) {
+          final horas = int.parse(partes[0]);
+          final minutos = int.parse(partes[1]);
+          final segundos = int.parse(partes[2]);
+          
+          final totalSegundos = (horas * 3600) + (minutos * 60) + segundos;
+          _establecerTiempo(totalSegundos);
+          return;
+        } else if (partes.length == 2) {
+          // Formato MM:SS
+          final minutos = int.parse(partes[0]);
+          final segundos = int.parse(partes[1]);
+          
+          final totalSegundos = (minutos * 60) + segundos;
+          _establecerTiempo(totalSegundos);
+          return;
+        }
+      }
+      
+      // Intentar interpretar como segundos directamente
+      final segundos = int.parse(texto);
+      _establecerTiempo(segundos);
+    } catch (e) {
+      // Si hay error, mostrar mensaje
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Formato inválido. Use HH:MM:SS o un valor numérico en segundos.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -915,7 +1058,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
         children: [
           _buildTikTokControlPanel(),
           const SizedBox(height: 16),
-          _buildControlTemporizador(), // Nuevo control de temporizador
+          _buildControlTemporizador(),
           const SizedBox(height: 16),
           _buildSelectorEsqueleto(),
           const SizedBox(height: 16),
@@ -930,6 +1073,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
     _usuarioTikTokController.dispose();
     _tikTokService.dispose();
     _detenerActualizadorPuntos();
+    _tiempoController.dispose();
     super.dispose();
   }
 
@@ -965,6 +1109,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                         tiempoInicial: _tiempoSeleccionado,
                         pausarTemporizador: _temporizadorPausado,
                         onTiempoActualizado: _actualizarTiempoDesdeStream,
+                        mostrarVideo: true, // Activar la funcionalidad de video
                       ),
                     ),
                   ),
@@ -994,6 +1139,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                         tiempoInicial: _tiempoSeleccionado,
                         pausarTemporizador: _temporizadorPausado,
                         onTiempoActualizado: _actualizarTiempoDesdeStream,
+                        mostrarVideo: true, // Activar la funcionalidad de video
                       ),
                     ),
                   ),
@@ -1018,6 +1164,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                         tiempoInicial: _tiempoSeleccionado,
                         pausarTemporizador: _temporizadorPausado,
                         onTiempoActualizado: _actualizarTiempoDesdeStream,
+                        mostrarVideo: true, // Activar la funcionalidad de video
                       ),
                     ),
                   ),
@@ -1042,6 +1189,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                         tiempoInicial: _tiempoSeleccionado,
                         pausarTemporizador: _temporizadorPausado,
                         onTiempoActualizado: _actualizarTiempoDesdeStream,
+                        mostrarVideo: true, // Activar la funcionalidad de video
                       ),
                     ),
                     const Divider(height: 1),
