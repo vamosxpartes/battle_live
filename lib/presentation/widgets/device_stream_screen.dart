@@ -9,6 +9,9 @@ class DeviceStream extends StatefulWidget {
   final int puntosIzquierda;
   final int puntosDerecha;
   final Donador? mayorDonador;
+  final int? tiempoInicial; // Nuevo parámetro para tiempo inicial
+  final bool pausarTemporizador; // Nuevo parámetro para controlar si está pausado
+  final Function(int)? onTiempoActualizado; // Callback para notificar tiempo actual
 
   const DeviceStream({
     super.key,
@@ -16,6 +19,9 @@ class DeviceStream extends StatefulWidget {
     required this.puntosIzquierda,
     required this.puntosDerecha,
     this.mayorDonador,
+    this.tiempoInicial,
+    this.pausarTemporizador = false,
+    this.onTiempoActualizado,
   });
 
   @override
@@ -25,8 +31,9 @@ class DeviceStream extends StatefulWidget {
 class _DeviceStreamState extends State<DeviceStream>
     with TickerProviderStateMixin {
   // Variables para el temporizador regresivo
-  int _remainingSeconds = 3600; // 1 hora inicial
-  late Timer _countdownTimer;
+  late int _remainingSeconds;
+  Timer? _countdownTimer;
+  bool _isPaused = false;
 
   // Controladores para animaciones
   late AnimationController _leftPulseController;
@@ -45,6 +52,10 @@ class _DeviceStreamState extends State<DeviceStream>
   @override
   void initState() {
     super.initState();
+    
+    // Inicializar con el tiempo proporcionado o el valor por defecto
+    _remainingSeconds = widget.tiempoInicial ?? 3600; // 1 hora por defecto
+    _isPaused = widget.pausarTemporizador;
 
     // Configurar controladores de animación
     _leftPulseController = AnimationController(
@@ -104,22 +115,68 @@ class _DeviceStreamState extends State<DeviceStream>
     // Iniciar animación del timer (se activará cuando queden menos de 5 minutos)
     _timerPulseController.repeat(reverse: true);
 
-    // Iniciar contador regresivo
-    _startCountdownTimer();
+    // Iniciar contador regresivo si no está pausado
+    if (!_isPaused) {
+      _startCountdownTimer();
+    }
   }
 
   void _startCountdownTimer() {
+    _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
           if (_remainingSeconds > 0) {
             _remainingSeconds--;
+            // Notificar tiempo actualizado si hay callback
+            widget.onTiempoActualizado?.call(_remainingSeconds);
           } else {
-            _countdownTimer.cancel();
+            _countdownTimer?.cancel();
           }
         });
       }
     });
+  }
+  
+  // Método para establecer un nuevo tiempo
+  void setTime(int newSeconds) {
+    if (mounted) {
+      setState(() {
+        _remainingSeconds = newSeconds;
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(DeviceStream oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // Actualizar temporizador si cambia el tiempo inicial
+    if (widget.tiempoInicial != null && 
+        widget.tiempoInicial != oldWidget.tiempoInicial) {
+      setState(() {
+        _remainingSeconds = widget.tiempoInicial!;
+      });
+    }
+    
+    // Manejar pausa/reanudar si cambia el estado
+    if (widget.pausarTemporizador != oldWidget.pausarTemporizador) {
+      if (widget.pausarTemporizador) {
+        _isPaused = true;
+        _countdownTimer?.cancel();
+      } else if (_isPaused) {
+        _isPaused = false;
+        _startCountdownTimer();
+      }
+    }
+    
+    // Activar pulsaciones si los puntajes cambian
+    if (widget.puntosIzquierda > oldWidget.puntosIzquierda) {
+      _pulseLeftScore();
+    }
+    if (widget.puntosDerecha > oldWidget.puntosDerecha) {
+      _pulseRightScore();
+    }
   }
 
   String _formatTime(int seconds) {
@@ -155,24 +212,12 @@ class _DeviceStreamState extends State<DeviceStream>
   }
 
   @override
-  void didUpdateWidget(DeviceStream oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Activar pulsaciones si los puntajes cambian
-    if (widget.puntosIzquierda > oldWidget.puntosIzquierda) {
-      _pulseLeftScore();
-    }
-    if (widget.puntosDerecha > oldWidget.puntosDerecha) {
-      _pulseRightScore();
-    }
-  }
-
-  @override
   void dispose() {
     _leftPulseController.dispose();
     _rightPulseController.dispose();
     _shineController.dispose();
     _timerPulseController.dispose();
-    _countdownTimer.cancel();
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -283,6 +328,7 @@ class _DeviceStreamState extends State<DeviceStream>
                         pulseAnimation: _leftPulseAnimation,
                         label: widget.esqueleto?['contendiente1'] as String? ?? 'Equipo 1', // Etiqueta del esqueleto
                         isWinning: isLeftWinning,
+                        isLeftSide: true, // Forzar lado izquierdo
                       ),
 
                       // Podio vertical en el centro
@@ -300,6 +346,7 @@ class _DeviceStreamState extends State<DeviceStream>
                         pulseAnimation: _rightPulseAnimation,
                         label: widget.esqueleto?['contendiente2'] as String? ?? 'Equipo 2', // Etiqueta del esqueleto
                         isWinning: isRightWinning,
+                        isLeftSide: false, // Forzar lado derecho
                       ),
                     ],
                   ),
@@ -330,6 +377,9 @@ class VerticalPodium extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Imprimir información de debug sobre avatarUrl
+    print('VerticalPodium - AvatarUrl: $avatarUrl');
+    
     return Container(
       width: 100,
       height: 230,
@@ -362,13 +412,15 @@ class VerticalPodium extends StatelessWidget {
                 color: Colors.white,
                 width: 2,
               ),
-              image: DecorationImage(
-                // Usar avatarUrl si está disponible, de lo contrario, una imagen por defecto o nada
-                image: avatarUrl != null && avatarUrl!.isNotEmpty
-                    ? NetworkImage(avatarUrl!)
-                    : const NetworkImage('https://i.pravatar.cc/150?img=404') as ImageProvider, // Placeholder o imagen por defecto
-                fit: BoxFit.cover,
-              ),
+              image: avatarUrl != null && avatarUrl!.isNotEmpty
+                  ? DecorationImage(
+                      image: NetworkImage(avatarUrl!),
+                      fit: BoxFit.cover,
+                      onError: (exception, stackTrace) {
+                        print('Error loading avatar image: $exception');
+                      },
+                    )
+                  : null, // No usar DecorationImage si no hay URL
               boxShadow: [
                 BoxShadow(
                   color: Colors.blue.withAlpha(128),
@@ -377,6 +429,10 @@ class VerticalPodium extends StatelessWidget {
                 ),
               ],
             ),
+            // Mostrar un placeholder si no hay URL o está vacía
+            child: avatarUrl == null || avatarUrl!.isEmpty
+                ? const Icon(Icons.person, color: Colors.white, size: 40)
+                : null,
           ),
 
           // Nombre de usuario
@@ -449,7 +505,7 @@ class VerticalPodium extends StatelessWidget {
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 24,
+                  fontSize: 16,
                   shadows: [
                     Shadow(
                       color: Colors.blue.withAlpha(128),
@@ -474,6 +530,7 @@ class ScoreCounter extends StatelessWidget {
   final Animation<double> pulseAnimation;
   final String label;
   final bool isWinning;
+  final bool isLeftSide;
 
   const ScoreCounter({
     Key? key,
@@ -481,11 +538,15 @@ class ScoreCounter extends StatelessWidget {
     required this.color,
     required this.pulseAnimation,
     required this.label,
-    this.isWinning = false,
+    required this.isWinning,
+    required this.isLeftSide,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Para depuración
+    print('ScoreCounter - Label: $label, isLeftSide: $isLeftSide');
+    
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -605,7 +666,225 @@ class ScoreCounter extends StatelessWidget {
             ),
           ),
         ),
+        
+        const SizedBox(height: 20),
+        
+        // Rejilla de donaciones populares - ahora se muestra siempre, no solo cuando está ganando
+        GiftGrid(isLeftSide: isLeftSide),
       ],
+    );
+  }
+}
+
+// Widget para mostrar las donaciones populares en una rejilla
+class GiftGrid extends StatelessWidget {
+  final bool isLeftSide;
+  
+  const GiftGrid({
+    Key? key,
+    required this.isLeftSide,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+
+    // con lo definido en tiktok_gift_classifier.dart
+    final List<Map<String, dynamic>> gifts = isLeftSide 
+      ? [
+          // Grupo_A (Contendiente 1) - Valores actualizados según _directGiftMapping
+          {'name': 'Rose', 'value': 1, 'color': Colors.pink, 'gift_id': 'Rose', 'icon': '🌹', 'image_name': 'Rose_5655.png'},
+          {'name': 'Finger Heart', 'value': 5, 'color': Colors.red, 'gift_id': 'Finger Heart', 'icon': '❤️', 'image_name': 'FingerHeart_5487.png'},
+          {'name': 'Ice Cream', 'value': 5, 'color': Colors.cyan, 'gift_id': 'Ice Cream Cone', 'icon': '🍦', 'image_name': 'icecream_8963.png'},
+          {'name': 'Sausage', 'value': 10, 'color': Colors.orange, 'gift_id': 'Sausage', 'icon': '🌭', 'image_name': 'Sausage_6124.png'},
+          {'name': 'Cake', 'value': 20, 'color': Colors.amber, 'gift_id': 'Cake', 'icon': '🍰', 'image_name': 'Cake_5720.png'},
+          {'name': 'Level-up', 'value': 99, 'color': Colors.purple, 'gift_id': 'Level-up Sparks', 'icon': '⬆️', 'image_name': 'Level-up_12678.webp'},
+        ]
+      : [
+          // Grupo_B (Contendiente 2) - Valores actualizados según _directGiftMapping
+          {'name': 'GG', 'value': 1, 'color': Colors.teal, 'gift_id': 'GG', 'icon': '👍', 'image_name': 'GG_8286.webp'},
+          {'name': 'Fire', 'value': 5, 'color': Colors.deepOrange, 'gift_id': 'Fire', 'icon': '🔥', 'image_name': 'fire_5719.png'},
+          {'name': 'Mic', 'value': 5, 'color': Colors.blue, 'gift_id': 'Mic', 'icon': '🎤', 'image_name': 'Mic_5650.png'},
+          {'name': 'Pretzel', 'value': 10, 'color': Colors.brown, 'gift_id': 'Pretzel', 'icon': '🥨', 'image_name': 'Pretzel_7056.webp'},
+          {'name': 'S Flower', 'value': 20, 'color': Colors.pink, 'gift_id': 'S Flower', 'icon': '🌸', 'image_name': 'S Flower_14115.webp'},
+          {'name': 'Birthday', 'value': 99, 'color': Colors.blue, 'gift_id': 'Birthday', 'icon': '🎂', 'image_name': 'birhday_9096.webp'},
+        ];
+    
+    return Container(
+      width: 120,
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(140),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isLeftSide ? Colors.blue.withAlpha(120) : Colors.red.withAlpha(120),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isLeftSide ? Colors.blue.withAlpha(40) : Colors.red.withAlpha(40),
+            blurRadius: 5,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            isLeftSide ? 'Grupo A' : 'Grupo B',
+            style: TextStyle(
+              color: isLeftSide ? Colors.blue.withAlpha(230) : Colors.red.withAlpha(230),
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              shadows: const [
+                Shadow(
+                  color: Colors.black,
+                  blurRadius: 2,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 160, // Altura fija para evitar overflow
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 1.0,
+                crossAxisSpacing: 5,
+                mainAxisSpacing: 5,
+              ),
+              itemCount: 6,
+              itemBuilder: (context, index) {
+                final gift = gifts[index];
+                return _buildGiftItem(gift, isLeftSide);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildGiftItem(Map<String, dynamic> gift, bool isLeftSide) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(100),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: gift['color'].withAlpha(150),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: gift['color'].withAlpha(40),
+            blurRadius: 3,
+            spreadRadius: 0,
+          ),
+        ],
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.black.withAlpha(120),
+            gift['color'].withAlpha(60),
+          ],
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Usar imagen si está disponible, sino emoji
+          Expanded(
+            flex: 3,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4, left: 2, right: 2),
+              child: _buildGiftImage(gift),
+            ),
+          ),
+          
+          // Valor del regalo
+          Expanded(
+            flex: 1,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(100),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(7),
+                  bottomRight: Radius.circular(7),
+                ),
+              ),
+              width: double.infinity,
+              child: Center(
+                child: Text(
+                  'x${gift['value']}',
+                  style: TextStyle(
+                    color: isLeftSide ? Colors.blue.shade100 : Colors.red.shade100,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black,
+                        blurRadius: 2,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildGiftImage(Map<String, dynamic> gift) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(7),
+        topRight: Radius.circular(7),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Fondo con gradiente
+          Container(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment.center,
+                radius: 0.8,
+                colors: [
+                  gift['color'].withOpacity(0.2),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          
+          // Contenedor para la imagen con padding
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Image.asset(
+              'assets/icons/${gift['image_name']}',
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                // Emoji como fallback si la imagen no se puede cargar
+                print('Error cargando imagen ${gift['image_name']}: $error');
+                return Center(
+                  child: Text(
+                    gift['icon'],
+                    style: const TextStyle(fontSize: 22),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

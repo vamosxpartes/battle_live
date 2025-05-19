@@ -87,6 +87,10 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
   final Map<String, Donador> _donadores = {};
   Donador? _mayorDonador;
 
+  // Propiedades para el temporizador
+  int _tiempoSeleccionado = 3600; // 1 hora por defecto
+  bool _temporizadorPausado = false;
+
   @override
   void initState() {
     super.initState();
@@ -143,7 +147,22 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
       
       final uniqueId = userData['uniqueId'] as String;
       final nickname = userData['nickname'] as String;
-      final profilePictureUrl = userData['profilePictureUrl'] as String?;
+      
+      // Manejar el nuevo formato de profilePictureUrl que ahora es un objeto con urls
+      String? profilePictureUrl;
+      final profilePicData = userData['profilePictureUrl'];
+      
+      if (profilePicData is String) {
+        // Formato antiguo: directamente una URL
+        profilePictureUrl = profilePicData;
+      } else if (profilePicData is Map<String, dynamic>) {
+        // Nuevo formato: objeto con array de URLs
+        final urls = profilePicData['urls'];
+        if (urls is List && urls.isNotEmpty) {
+          profilePictureUrl = urls[0] as String?;
+        }
+      }
+      
       final diamondCount = giftData['diamondCount'] as int;
       final repeatCount = giftData['repeatCount'] as int? ?? 1;
       
@@ -406,7 +425,7 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: RadialGradient(
-                              colors: [Colors.amber.shade300, Colors.amber.shade100.withOpacity(0.1)],
+                              colors: [Colors.amber.shade300, Colors.amber.shade100.withAlpha(100)],
                               stops: const [0.5, 1.0],
                             ),
                           ),
@@ -667,21 +686,164 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
     );
   }
 
-  // Widget para el panel de control lateral
-  Widget _buildPanelDeControl() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildTikTokControlPanel(),
-          const SizedBox(height: 24),
-          _buildSelectorEsqueleto(),
-          const SizedBox(height: 24),
-          _buildMayorDonadorCard(),
-        ],
+  // Widget para controlar el temporizador
+  Widget _buildControlTemporizador() {
+    return Card(
+      margin: const EdgeInsets.all(16),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Control de Temporizador',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // Tiempo actual
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _formatTime(_tiempoSeleccionado),
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: _tiempoSeleccionado < 300 ? Colors.red : 
+                          _tiempoSeleccionado < 900 ? Colors.orange : 
+                          Colors.blue,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // Presets de tiempo
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildTimePresetButton('30s', 30),
+                _buildTimePresetButton('1m', 60),
+                _buildTimePresetButton('5m', 300),
+                _buildTimePresetButton('30m', 1800),
+                _buildTimePresetButton('1h', 3600),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Botones de control
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Botón para reducir 1 minuto
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline),
+                  onPressed: () => _ajustarTiempo(-60),
+                  tooltip: 'Reducir 1 minuto',
+                  iconSize: 30,
+                  color: Colors.red,
+                ),
+                
+                // Botón para pausar/reanudar
+                ElevatedButton.icon(
+                  icon: Icon(_temporizadorPausado ? Icons.play_arrow : Icons.pause),
+                  label: Text(_temporizadorPausado ? 'Reanudar' : 'Pausar'),
+                  onPressed: _togglePausa,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _temporizadorPausado ? Colors.green : Colors.amber,
+                    foregroundColor: _temporizadorPausado ? Colors.white : Colors.black87,
+                  ),
+                ),
+                
+                // Botón para agregar 1 minuto
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: () => _ajustarTiempo(60),
+                  tooltip: 'Añadir 1 minuto',
+                  iconSize: 30,
+                  color: Colors.green,
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Botón para reiniciar el temporizador
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Reiniciar temporizador'),
+                onPressed: _reiniciarTemporizador,
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+  
+  // Formatear tiempo en formato HH:MM:SS
+  String _formatTime(int seconds) {
+    int hours = seconds ~/ 3600;
+    int minutes = (seconds % 3600) ~/ 60;
+    int secs = seconds % 60;
+
+    return "${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}";
+  }
+  
+  // Botón para presets de tiempo
+  Widget _buildTimePresetButton(String label, int seconds) {
+    final bool isSelected = _tiempoSeleccionado == seconds;
+    
+    return ElevatedButton(
+      onPressed: () => _establecerTiempo(seconds),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isSelected ? Colors.blue : Colors.grey.shade200,
+        foregroundColor: isSelected ? Colors.white : Colors.black87,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(label),
+    );
+  }
+  
+  // Métodos para controlar el temporizador
+  void _establecerTiempo(int seconds) {
+    setState(() {
+      _tiempoSeleccionado = seconds;
+    });
+  }
+  
+  void _ajustarTiempo(int segundosAjuste) {
+    setState(() {
+      _tiempoSeleccionado = (_tiempoSeleccionado + segundosAjuste).clamp(0, 7200); // Limitar entre 0 y 2 horas
+    });
+  }
+  
+  void _togglePausa() {
+    setState(() {
+      _temporizadorPausado = !_temporizadorPausado;
+    });
+  }
+  
+  void _reiniciarTemporizador() {
+    setState(() {
+      _tiempoSeleccionado = 3600; // Volver a 1 hora
+      _temporizadorPausado = false;
+    });
+  }
+  
+  // Método para actualizar el tiempo desde el widget DeviceStream
+  void _actualizarTiempoDesdeStream(int nuevoTiempo) {
+    if (!_temporizadorPausado && mounted) {
+      setState(() {
+        _tiempoSeleccionado = nuevoTiempo;
+      });
+    }
   }
 
   // Widget para seleccionar el esqueleto para el DeviceStream
@@ -744,6 +906,25 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
     );
   }
 
+  // Widget para el panel de control lateral
+  Widget _buildPanelDeControl() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTikTokControlPanel(),
+          const SizedBox(height: 16),
+          _buildControlTemporizador(), // Nuevo control de temporizador
+          const SizedBox(height: 16),
+          _buildSelectorEsqueleto(),
+          const SizedBox(height: 16),
+          _buildMayorDonadorCard(),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _usuarioTikTokController.dispose();
@@ -768,18 +949,51 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Si el ancho es suficiente, mostrar DeviceStream a la izquierda y panel de control a la derecha
-            if (constraints.maxWidth > 800) { // Ajusta este breakpoint según sea necesario
+            // Diseño responsivo mejorado basado en el ancho de la pantalla
+            if (constraints.maxWidth > 1200) {
+              // Pantalla muy ancha - Panel de control a la derecha, más espacio para el stream
               return Row(
                 children: [
                   Expanded(
-                    flex: 3, // Ajusta flex para dar más espacio a DeviceStream
+                    flex: 4, // Más espacio para el stream en pantallas más grandes
                     child: Center(
                       child: DeviceStream(
                         esqueleto: _esqueletoSeleccionadoParaStream,
                         puntosIzquierda: _puntosSeccion1,
                         puntosDerecha: _puntosSeccion2,
                         mayorDonador: _mayorDonador,
+                        tiempoInicial: _tiempoSeleccionado,
+                        pausarTemporizador: _temporizadorPausado,
+                        onTiempoActualizado: _actualizarTiempoDesdeStream,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 380, // Ancho fijo para el panel de control
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: Colors.grey.shade300, width: 1)
+                      ),
+                    ),
+                    child: _buildPanelDeControl(),
+                  ),
+                ],
+              );
+            } else if (constraints.maxWidth > 800) {
+              // Pantalla ancha - Panel de control a la derecha, menos espacio para el stream
+              return Row(
+                children: [
+                  Expanded(
+                    flex: 3, 
+                    child: Center(
+                      child: DeviceStream(
+                        esqueleto: _esqueletoSeleccionadoParaStream,
+                        puntosIzquierda: _puntosSeccion1,
+                        puntosDerecha: _puntosSeccion2,
+                        mayorDonador: _mayorDonador,
+                        tiempoInicial: _tiempoSeleccionado,
+                        pausarTemporizador: _temporizadorPausado,
+                        onTiempoActualizado: _actualizarTiempoDesdeStream,
                       ),
                     ),
                   ),
@@ -789,26 +1003,48 @@ class _ActivarLivePageState extends State<ActivarLivePage> {
                   ),
                 ],
               );
+            } else if (constraints.maxWidth > 600) {
+              // Tablet - Vista separada pero con mejor proporción
+              return Column(
+                children: [
+                  SizedBox(
+                    height: constraints.maxHeight * 0.6,
+                    child: Center(
+                      child: DeviceStream(
+                        esqueleto: _esqueletoSeleccionadoParaStream,
+                        puntosIzquierda: _puntosSeccion1,
+                        puntosDerecha: _puntosSeccion2,
+                        mayorDonador: _mayorDonador,
+                        tiempoInicial: _tiempoSeleccionado,
+                        pausarTemporizador: _temporizadorPausado,
+                        onTiempoActualizado: _actualizarTiempoDesdeStream,
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: _buildPanelDeControl(),
+                  ),
+                ],
+              );
             } else {
-              // En pantallas más estrechas, mostrar DeviceStream arriba y panel de control abajo (o en un Drawer)
-              // Por ahora, una columna simple con scroll
+              // Teléfono - Vista apilada compacta
               return SingleChildScrollView(
                 child: Column(
                   children: [
-                    SizedBox(
-                      // Altura deseada para el DeviceStream en modo columna
-                      // Podría ser una fracción de la altura de la pantalla
-                      height: constraints.maxHeight * 0.65, // Ejemplo: 65% de la altura disponible
-                      child: Center(
-                        child: DeviceStream(
-                          esqueleto: _esqueletoSeleccionadoParaStream,
-                          puntosIzquierda: _puntosSeccion1,
-                          puntosDerecha: _puntosSeccion2,
-                          mayorDonador: _mayorDonador,
-                        ),
+                    AspectRatio(
+                      aspectRatio: 9/16,
+                      child: DeviceStream(
+                        esqueleto: _esqueletoSeleccionadoParaStream,
+                        puntosIzquierda: _puntosSeccion1,
+                        puntosDerecha: _puntosSeccion2,
+                        mayorDonador: _mayorDonador,
+                        tiempoInicial: _tiempoSeleccionado,
+                        pausarTemporizador: _temporizadorPausado,
+                        onTiempoActualizado: _actualizarTiempoDesdeStream,
                       ),
                     ),
-                    const Divider(),
+                    const Divider(height: 1),
                     _buildPanelDeControl(),
                   ],
                 ),

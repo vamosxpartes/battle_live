@@ -5,7 +5,7 @@ class AppConfig {
   factory AppConfig() => _instance;
   
   // URLs de servidor según el ambiente
-  static const String _devSocketUrl = 'http://192.168.100.105:3000';
+  static const String _devSocketUrl = 'http://192.168.100.106:3030';
   static const String _prodSocketUrl = 'https://api.battlelive.com';
   
   // Configuración del servidor Socket.io con valor por defecto

@@ -12,7 +12,7 @@ class AppConfig {
   
   // Valores de configuración
   bool _isProduction = false;
-  String _socketServerUrl = 'http://192.168.100.105:3000';
+  String _socketServerUrl = 'http://192.168.100.106:3030';
   
   // Inicializar configuración
   void init({required bool isProduction}) {
@@ -22,7 +22,7 @@ class AppConfig {
     if (_isProduction) {
       _socketServerUrl = 'https://battle-live-server.com'; // URL de producción
     } else {
-      _socketServerUrl = 'http://192.168.100.105:3000'; // URL de desarrollo local
+      _socketServerUrl = 'http://192.168.100.106:3030'; // URL de desarrollo local
     }
   }
   

@@ -40,3 +40,4 @@ flutter:
   # Assets para la aplicación
   assets:
     - assets/gif/
+    - assets/icons/

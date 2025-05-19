@@ -215,7 +215,21 @@ class TikTokLiveClient {
         final user = data['user'] as Map<String, dynamic>?;
         final username = user?['nickname'] ?? data['username'] ?? 'Usuario';
         final userId = user?['userId'] ?? data['userId'] ?? '';
-        final avatarUrl = user?['profilePictureUrl'] ?? data['avatarUrl'] ?? '';
+        
+        // Procesar avatarUrl/profilePictureUrl que puede ser un objeto complejo
+        String avatarUrl = '';
+        final profilePicData = user?['profilePictureUrl'];
+        
+        if (profilePicData is String) {
+          // Formato antiguo: directamente una URL
+          avatarUrl = profilePicData;
+        } else if (profilePicData is Map<String, dynamic> && profilePicData.containsKey('urls')) {
+          // Nuevo formato: objeto con array de URLs
+          final urls = profilePicData['urls'];
+          if (urls is List && urls.isNotEmpty) {
+            avatarUrl = urls[0].toString();
+          }
+        }
         
         AppLogger.info(
           'Regalo procesado: Usuario=$username, Regalo=$giftName, Diamantes=$diamondCount, Repeticiones=$repeatCount',

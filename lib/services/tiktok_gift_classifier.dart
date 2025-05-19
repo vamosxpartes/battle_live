@@ -1,15 +1,16 @@
 // Servicio para clasificar regalos de TikTok en grupos y asignar puntos
 import 'package:battle_live/core/logging/app_logger.dart';
+import 'dart:math';
 
 class TikTokGiftClassifier {
   // Mapeo de grupos y regalos con sus valores en diamantes
   final Map<String, Map<String, List<String>>> _giftGroups = {
     "Grupo_A": {
-      "1": ["Rose", "GG", "Coffee", "Alien Peace Sign", "Ice Cream Cone"],
-      "5": ["Finger Heart", "Chic", "Duckling", "Cotton's Shell", "Mic"],
-      "10": ["Dolphin", "Rosa", "Christmas Wreath", "Gold Boxing Glove", "Hi Bear"],
-      "30": ["Doughnut"], // Añadido basado en eventos recibidos
-      "99": ["Hand Hearts", "Confetti", "Bubble Gum", "Fest Crown", "Paper Crane", "Cap"], // Añadido Cap
+      "1": ["Rose", "Coffee", "Alien Peace Sign"],
+      "5": ["Finger Heart", "Chic", "Duckling", "Cotton's Shell", "Ice Cream Cone"],
+      "10": ["Dolphin", "Rosa", "Christmas Wreath", "Gold Boxing Glove", "Hi Bear", "Sausage"],
+      "20": ["Cake"],
+      "99": ["Hand Hearts", "Confetti", "Bubble Gum", "Fest Crown", "Paper Crane", "Level-up Sparks"],
       "199": ["Massage for You", "Wooly Hat", "Eye See You", "Dancing Hands", "Santa's Mailbox"],
       "299": ["Corgi", "Elephant Trunk", "Fruit Friends", "Play for You", "Rock Star"],
       "399": ["Tom's Hug", "Relaxed Goose", "Rosie the Rose Bean", "Jolly the Joy Bean", "Good Afternoon"],
@@ -33,11 +34,11 @@ class TikTokGiftClassifier {
       "44999": ["TikTok Universe"]
     },
     "Grupo_B": {
-      "1": ["Flame Heart", "Lightning Bolt", "Mini Speaker", "Hi July", "Football"],
-      "5": ["Pandas", "Hi", "Finger Heart", "Chic", "Duckling"],
-      "10": ["Festive Potato", "Little Ghost", "Friendship Necklace", "Tiny Dino", "Cheer You Up"],
-      "30": ["Doughnut"], // También añadido para balance
-      "99": ["Flowers", "Super GG", "Love Painting", "Little Crown", "Level-up Sparks", "Cap"], // Añadido Cap
+      "1": ["GG", "Lightning Bolt", "Hi July", "Football"],
+      "5": ["Fire", "Mic", "Pandas", "Hi", "Finger Heart", "Chic", "Duckling"],
+      "10": ["Festive Potato", "Little Ghost", "Friendship Necklace", "Tiny Dino", "Cheer You Up", "Pretzel"],
+      "20": ["S Flower"],
+      "99": ["Flowers", "Super GG", "Love Painting", "Little Crown", "Birthday"],
       "199": ["Hearts", "Potato in Paris", "Hanging Lights", "Night Star", "Headphones"],
       "299": ["Butterfly for You", "Paddington Hat", "Elf's Hat", "Dancing Flower", "Boxing Gloves"],
       "399": ["Good Morning", "Beating Heart", "Coral", "Hands Up", "Sage the Smart Bean"],
@@ -65,8 +66,23 @@ class TikTokGiftClassifier {
   // Mapeo directo para regalos específicos a su valor y grupo
   // Útil para coincidencias exactas y rápidas
   final Map<String, Map<String, dynamic>> _directGiftMapping = {
-    "cap": {"grupo": "Grupo_A", "valor": 99},
-    "doughnut": {"grupo": "Grupo_B", "valor": 30}
+    "rose": {"grupo": "Grupo_A", "valor": 1}, //revisado
+    "gg": {"grupo": "Grupo_B", "valor": 1}, //revisado
+
+    "fire": {"grupo": "Grupo_B", "valor": 5},
+    "Mic": {"grupo": "Grupo_B", "valor": 5}, //revisado
+    "finger heart": {"grupo": "Grupo_A", "valor": 5}, //revisado
+    "ice cream cone": {"grupo": "Grupo_A", "valor": 5}, //revisado
+
+    "pretzel": {"grupo": "Grupo_B", "valor": 10}, //revisado
+    "sausage": {"grupo": "Grupo_A", "valor": 10}, //revisado
+
+    "s flower": {"grupo": "Grupo_B", "valor": 20}, //revisado
+    "cake": {"grupo": "Grupo_A", "valor": 20}, //revisado
+    
+
+    "birthday": {"grupo": "Grupo_B", "valor": 99}, //revisado
+    "level-up sparks": {"grupo": "Grupo_A", "valor": 99}, //revisado
   };
 
   // Mapeo de nombres de regalo a su grupo y valor
@@ -82,14 +98,25 @@ class TikTokGiftClassifier {
     AppLogger.info('Inicializando mapeo de regalos de TikTok', name: 'TikTokGiftClassifier');
     int totalRegalos = 0;
     
+    // Primero agregar los mapeos directos para asegurar prioridad
+    _directGiftMapping.forEach((regalo, info) {
+      _giftLookup[regalo.toLowerCase()] = info;
+      totalRegalos++;
+    });
+    
+    // Luego agregar los del mapeo general
     _giftGroups.forEach((grupo, valoresRegalos) {
       valoresRegalos.forEach((valor, regalos) {
         for (var regalo in regalos) {
-          _giftLookup[regalo.toLowerCase()] = {
-            'grupo': grupo,
-            'valor': int.parse(valor)
-          };
-          totalRegalos++;
+          final nombreNormalizado = regalo.toLowerCase();
+          // Solo agregar si no existe ya en el mapeo directo
+          if (!_giftLookup.containsKey(nombreNormalizado)) {
+            _giftLookup[nombreNormalizado] = {
+              'grupo': grupo,
+              'valor': int.parse(valor)
+            };
+            totalRegalos++;
+          }
         }
       });
     });
@@ -140,8 +167,11 @@ class TikTokGiftClassifier {
   Map<String, dynamic> procesarRegalo(String nombreRegalo, int diamondCount) {
     AppLogger.info('Procesando regalo: "$nombreRegalo" con $diamondCount diamantes', name: 'TikTokGiftDebug');
     
+    // Normalizar el nombre para buscar (convertir a minúsculas para mayor compatibilidad)
+    final nombreNormalizado = nombreRegalo.toLowerCase().trim();
+    
     // Intentar clasificar el regalo por nombre
-    final infoRegalo = clasificarRegalo(nombreRegalo);
+    final infoRegalo = clasificarRegalo(nombreNormalizado);
     
     // Si tenemos un valor de diamantes válido pero no encontramos el regalo,
     // podemos confiar en el valor de diamantes para asignarlo directamente
@@ -203,21 +233,22 @@ class TikTokGiftClassifier {
 
   // Determina el grupo basado en el valor de diamantes cuando no encontramos el regalo en nuestra lista
   String _determinarGrupoPorDiamantes(int diamondCount) {
-    // Regla: valores pares para Grupo_A, impares para Grupo_B
-    final grupo = diamondCount % 2 == 0 ? "Grupo_A" : "Grupo_B";
+    // Asignación aleatoria en lugar de basarse en el valor
+    final random = Random();
+    final grupo = random.nextBool() ? "Grupo_A" : "Grupo_B";
     
-    AppLogger.info('Asignando grupo por valor de diamantes: $diamondCount -> $grupo', name: 'TikTokGiftDebug');
+    AppLogger.info('Asignando grupo aleatoriamente por valor de diamantes: $diamondCount -> $grupo', name: 'TikTokGiftDebug');
     
     return grupo;
   }
   
   // Determina el grupo basado en el nombre del regalo
   String _determinarGrupoPorNombre(String nombre) {
-    // Regla simple basada en la longitud del nombre
-    final nombreNormalizado = nombre.toLowerCase().trim();
-    final grupo = nombreNormalizado.length % 2 == 0 ? "Grupo_A" : "Grupo_B";
+    // Selección aleatoria entre Grupo_A y Grupo_B
+    final random = Random();
+    final grupo = random.nextBool() ? "Grupo_A" : "Grupo_B";
     
-    AppLogger.info('Asignando grupo por nombre: "$nombre" (longitud ${nombreNormalizado.length}) -> $grupo', name: 'TikTokGiftDebug');
+    AppLogger.info('Asignando grupo aleatoriamente para regalo no clasificado: "$nombre" -> $grupo', name: 'TikTokGiftDebug');
     
     return grupo;
   }
